@@ -23,7 +23,7 @@ Tcp_Server::Tcp_Server(const std::string &ip, size_t port) {
 				);
 		this->bindSocket(ip, port);
 		this->listenSocket();
-		this->acceptClient();
+		/* this->acceptClient(); */
 	} catch(const std::runtime_error &ex) {
 		std::cout << "Error code: " << errno << std::endl;
 		perror(ex.what());
@@ -34,18 +34,24 @@ Tcp_Server::~Tcp_Server() {
 	this->closeSocket();
 }
 
-int Tcp_Server::send(const std::string &msg) const {
-	// if client exists
-	// send message
-	// else return -1
-	return 0;
+void Tcp_Server::sendMessage(const std::string &msg) const {
+	int send_result = write(this->_client_fd.get(), msg.c_str(), msg.size());
+	if (send_result == -1) {
+		throw std::runtime_error("Sending the message to client error");
+	}
+	if (send_result > 0) {
+		log("Sending message to the client - OK");
+	}
+	log("Send to the client: ", msg);
 }
 
-int Tcp_Server::read(std::string *msg) const {
-	// if client exists
-	// read message
-	// else return -1
-	return 0;
+void Tcp_Server::readMessage(char *buffer) const {
+	log("Before reading the message");
+	int read_result = read(this->_client_fd.get(), buffer, 1024);
+	if (read_result == -1) {
+		throw std::runtime_error("Reading from socket error");
+	}
+	log("Read from client: ", *buffer);
 }
 
 void Tcp_Server::createSocket(int domain, int type, int protocol) {
@@ -60,9 +66,7 @@ void Tcp_Server::createSocket(int domain, int type, int protocol) {
 
 void Tcp_Server::bindSocket(const std::string &ip, size_t port) {
 	struct sockaddr_in addr;
-
-	log("Created pointer to sockaddr_in struct ");
-
+	
 	// Set options for socket
 	int optional_value = 1;
 	if (setsockopt(this->_socket_fd.get(), // Socket fd
@@ -75,19 +79,21 @@ void Tcp_Server::bindSocket(const std::string &ip, size_t port) {
     }
 
 	addr.sin_family = AF_INET; // IPv4
-	addr.sin_port = ntohl(port); // Convert from network byte order to host byte order
-	addr.sin_addr.s_addr = INADDR_ANY;
+	addr.sin_port = htons(port); // Convert from host byte order to network byte order
+	int ip_convertation_result = inet_aton(
+			ip.c_str(),
+			&addr.sin_addr);
+	if (ip_convertation_result == 0) {
+		throw std::runtime_error("Convertation ip to network byte order failed!");
+	}
+	log("NBO Port:", addr.sin_port);
 
-	log("addr struct fully initialized");
 
 	int bindResult = bind(this->_socket_fd.get(), (struct sockaddr*) &addr, sizeof(addr));
-	log("bindingResult: ", bindResult);
 	if (bindResult == -1) {
 		throw std::runtime_error("Binding socket error");
 	}
-	if (bindResult == 0) {
-		log("Binding socket to port - OK");
-	}
+	log("Binding socket to port - OK");
 }
 
 void Tcp_Server::listenSocket(int max_queue) {
@@ -108,11 +114,13 @@ void Tcp_Server::acceptClient() {
 			                   (struct sockaddr*) &client_addr,
 							   &client_addr_size);
 	if (new_socket_fd == -1) {
-		throw std::runtime_error("Acceping socket error");
+		throw std::runtime_error("Accepting socket error");
 	}
 
 	_client_fd.set(new_socket_fd);
 	log("Accepting client - OK");
+	log("Client IP: ", inet_ntoa(client_addr.sin_addr));
+	log("Client PORT: ", ntohs(client_addr.sin_port));
 	log("Client file descriptor: ", _client_fd.get());
 }
 
@@ -121,5 +129,6 @@ void Tcp_Server::closeSocket() {
 	if(close(this->_socket_fd.get()) == -1) {
 		throw std::runtime_error("Closing the socket error");
 	}
+	log("Close the socket - OK");
 	this->_is_running = false;
 }

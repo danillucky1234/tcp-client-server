@@ -11,26 +11,24 @@
 
 #include "fileDescriptor.hpp"
 
-class Tcp_Server {
+class Tcp_Client {
 private:
 	FileDescriptor _socket_fd;
 	size_t _port;
+	int _ip;
 	int _client_ip;
-	bool _is_running;
-	FileDescriptor _client_fd;
 	
 public:
-	Tcp_Server(const std::string &ip, size_t port);
-	~Tcp_Server();
+	Tcp_Client(const std::string &ip, size_t port);
+	~Tcp_Client();
 
 	void sendMessage(const std::string &msg) const;
 	void readMessage(char *buffer) const;
-	void acceptClient();
 
 private:
-	Tcp_Server() {}
+	Tcp_Client() {}
 	void createSocket(int domain, int type, int protocol);
-	void bindSocket(const std::string &ip, size_t port);
-	void listenSocket(int max_queue = 5);
+	void connectSocket(const std::string &ip, size_t port);
 	void closeSocket();
 };
+
