@@ -11,9 +11,11 @@ void log(Args... args)
 #endif
 }
 
-Tcp_Client::Tcp_Client(const std::string &ip, size_t port) {
-	log("Ip:", ip);
-	log("Port:", port);
+Tcp_Client::Tcp_Client() {
+	this->_isConnected = false;
+}
+
+void Tcp_Client::connectTo(const std::string &ip, size_t port) {
 	try {
 		this->createSocket(
 				AF_INET,     // IPv4
@@ -63,6 +65,7 @@ void Tcp_Client::connectSocket(const std::string &ip, size_t port) {
 		throw std::runtime_error("Connection to server failed!");
 	}
 	this->_isConnected = true;
+	this->notifyConnection();
 	log("Connection - OK");
 }
 
@@ -85,15 +88,6 @@ void Tcp_Client::sendMessage(const std::string &msg) const {
 	log("Send to the server: ", msg);
 }
 
-/* void Tcp_Client::readMessage(char *buffer) const { */
-/* 	log("Before reading the message"); */
-/* 	int read_result = read(this->_socket_fd.get(), buffer, 1024); */
-/* 	if (read_result == -1) { */
-/* 		throw std::runtime_error("Reading from socket error"); */
-/* 	} */
-/* 	log("Read from server: ", buffer); */
-/* } */
-
 void Tcp_Client::receiveTask() {
 	char buffer[1024] = { 0 };
 	while(this->_isConnected) {
@@ -101,14 +95,41 @@ void Tcp_Client::receiveTask() {
 		if (read_result == -1) { // reading error
 			throw std::runtime_error("Reading from socket error");
 		} else if (read_result == 0) { // server disconnected
-			std::string disconnectionMsg = "Server closed connection";
+			log("Server closed connection");
 			this->_isConnected = false;
-			std::cout << disconnectionMsg << std::endl;
-			/* this->closeSocket(); */
+			this->notifyServerDisconnection();
 		} else {
-			/* this->_eventHandlerCallback(*this, ClientEvent::INCOMING_MSG, std::string(buffer)); */
-			std::cout << "New message from the server: " << buffer << std::endl;
+			log("New message from the server: ", buffer);
+			this->notifyIncomingMessage(std::string(buffer));
 		}
 	}
 
+}
+
+void Tcp_Client::registerObserver(Client_Observer *observer) {
+	this->_observers.push_back(observer);
+}
+
+void Tcp_Client::notifyConnection() const {
+	for (size_t i = 0; i < this->_observers.size(); ++i) {
+		if (this->_observers[i]->connectionHandler) {
+			this->_observers[i]->connectionHandler();
+		}
+	}
+}
+
+void Tcp_Client::notifyServerDisconnection() const {
+	for (size_t i = 0; i < this->_observers.size(); ++i) {
+		if (this->_observers[i]->disconnectionHandler) {
+			this->_observers[i]->disconnectionHandler();
+		}
+	}
+}
+
+void Tcp_Client::notifyIncomingMessage(const std::string &msg) const {
+	for (size_t i = 0; i < this->_observers.size(); ++i) {
+		if (this->_observers[i]->incomingMessageHandler) {
+			this->_observers[i]->incomingMessageHandler(msg);
+		}
+	}
 }

@@ -1,14 +1,26 @@
+#include <limits>
 #include "../include/tcp_client.h"
 
 int getUserInput();
 void showMenu();
+void onConnected();
+void onServerDisconnected();
+void onIncomingMessage(const std::string &msg);
+std::string getCurrentTime();
 
 int main() {
-	Tcp_Client *client = new Tcp_Client("127.0.0.1", 65123);
-	
 	int choice;
 	std::string msg;
 	bool isNeedTerminate = false;
+
+	Client_Observer *observer = new Client_Observer();
+	observer->connectionHandler = onConnected;
+	observer->disconnectionHandler = onServerDisconnected;
+	observer->incomingMessageHandler = onIncomingMessage;
+
+	Tcp_Client *client = new Tcp_Client();
+	client->registerObserver(observer);
+	client->connectTo("127.0.0.1", 65123);
 
 	while(!isNeedTerminate) {
 		// get input from user
@@ -32,6 +44,7 @@ int main() {
 	}
 
 	delete client;
+	delete observer;
 	return 0;
 }
 
@@ -56,3 +69,23 @@ int getUserInput() {
 	}
 }
 
+void onConnected() {
+	std::cout << "[" << getCurrentTime() << "] " << "Successfully connected to the server" << std::endl;
+}
+
+void onServerDisconnected() {
+	std::cout << "[" << getCurrentTime() << "] " << "Server closed connection" << std::endl;
+}
+
+void onIncomingMessage(const std::string &msg) {
+	std::cout << "[" << getCurrentTime() << "] " << "Server: " << msg << std::endl;
+}
+
+std::string getCurrentTime() {
+    time_t     now = time(0);
+    struct tm  tstruct;
+    char       buf[9]; // 12:12:12 + '\0'
+    tstruct = *localtime(&now);
+	std::strftime(buf, sizeof(buf), "%X", &tstruct);
+    return buf;
+}

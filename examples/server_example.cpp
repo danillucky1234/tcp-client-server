@@ -2,9 +2,21 @@
 
 int getUserInput();
 void showMenu();
+void onClientConnected(const std::string &clientName, const std::string &clientIp);
+void onClientDisconnected(const std::string &clientName, const std::string &clientIp);
+void onIncomingMessage(const std::string &clientName, const std::string &clientIp,
+					   const std::string &msg);
+std::string getCurrentTime();
 
 int main() {
-	Tcp_Server *server = new Tcp_Server("127.0.0.1", 65123);
+	Server_Observer *observer = new Server_Observer();
+	observer->connectionHandler = onClientConnected;
+	observer->disconnectionHandler = onClientDisconnected;
+	observer->incomingMessageHandler = onIncomingMessage;
+
+	Tcp_Server *server = new Tcp_Server();
+	server->registerObserver(observer);
+	server->start("127.0.0.1", 65123);
 
 	int choice;
 	std::string msg;
@@ -43,6 +55,7 @@ int main() {
 	}
 
 	delete server;
+	delete observer;
 	return 0;
 }
 
@@ -65,4 +78,26 @@ int getUserInput() {
 			return choice;
 		}
 	}
+}
+
+void onClientConnected(const std::string &clientName, const std::string &clientIp) {
+	std::cout << "[" << getCurrentTime() << "] " << "Client " << clientName << " [" << clientIp << "] was connected" << std::endl;
+}
+
+void onClientDisconnected(const std::string &clientName, const std::string &clientIp) {
+	std::cout << "[" << getCurrentTime() << "] " << "Client " << clientName << " [" << clientIp << "] was disconnected" << std::endl;
+}
+
+void onIncomingMessage(const std::string &clientName, const std::string &clientIp,
+					   const std::string &msg) {
+	std::cout << "[" << getCurrentTime() << "] " << clientName << " [" << clientIp << "]: " << msg << std::endl;
+}
+
+std::string getCurrentTime() {
+    time_t     now = time(0);
+    struct tm  tstruct;
+    char       buf[9]; // 12:12:12 + '\0'
+    tstruct = *localtime(&now);
+	std::strftime(buf, sizeof(buf), "%X", &tstruct);
+    return buf;
 }

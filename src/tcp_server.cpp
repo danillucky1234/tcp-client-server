@@ -11,8 +11,11 @@ void log(Args... args)
 #endif
 }
 
-Tcp_Server::Tcp_Server(const std::string &ip, size_t port) {
+Tcp_Server::Tcp_Server() {
 	this->_clients.reserve(5); // Reserve space for 5 clients
+}
+
+void Tcp_Server::start(const std::string &ip, size_t port) {
 
 	log("Ip: " + ip);
 	log("Port: ", port);
@@ -54,39 +57,6 @@ void Tcp_Server::sendMessage(const std::string &msg, int client_id) const {
 		log("Send to the ", client_id, " client: ", msg);
 	}
 }
-
-/*
- * @param buffer:
- * @param client_id:
- * @return vector of pairs looks like:
- * {
- *     <Client name1> : <Message from Client name1>
- *     <Client name2> : <Message from Client name2>
- * }
- */
-/* std::vector<std::pair<std::string, std::string>> Tcp_Server::readMessages(int client_id) const { */
-/* 	std::vector<std::pair<std::string, std::string>> message_log; */
-/* 	char tmp_buffer[1024] = { 0 }; */
-/* 	if (client_id == -1) { // read message from all clients */
-/* 		for (size_t i = 0; i < this->_clients.size(); ++i) { */
-/* 			log("trying to read", i); */
-/* 			this->readMessage(tmp_buffer, i); */
-/* 			message_log.push_back(std::make_pair(this->_clients[i]->getName(), std::string(tmp_buffer))); */
-/* 		} */
-/* 	} else if (client_id >= 0 && (size_t)client_id < this->_clients.size()) { // read message from specified client */
-/* 		this->readMessage(tmp_buffer, client_id); */
-/* 		message_log.push_back(std::make_pair(this->_clients[client_id]->getName(), std::string(tmp_buffer))); */
-/* 	} */
-/* 	return message_log; */
-/* } */
-
-/* void Tcp_Server::readMessage(char *buffer, int client_id) const { */
-/* 	int read_result = read(this->_clients.at(client_id)->getFd(), buffer, 1024); */
-/* 	if (read_result == -1) { */
-/* 		throw std::runtime_error("Reading from socket error"); */
-/* 	} */
-/* 	log("Read from client: ", buffer); */
-/* } */
 
 void Tcp_Server::createSocket(int domain, int type, int protocol) {
 	int sock_fd = socket(domain, type, protocol);
@@ -178,7 +148,7 @@ std::vector<std::string> Tcp_Server::getClientsIp() {
 	if (this->_clients.size() == 0) {
 		return {};
 	}
-	log("this->_clients_fd.size():", this->_clients.size());
+	log("Clients:", this->_clients.size());
 	
 	std::vector<std::string> clients_ip;
 	this->_mutex.lock();
@@ -191,7 +161,6 @@ std::vector<std::string> Tcp_Server::getClientsIp() {
 }
 
 void Tcp_Server::removeDeadClients() {
-	log("before iterating through clients");
 	this->_mutex.lock();
 	for (size_t i = 0; i < this->_clients.size(); ++i) {
 		if (!this->_clients[i]->isConnected()) {
@@ -200,22 +169,52 @@ void Tcp_Server::removeDeadClients() {
 		}
 	}
 	this->_mutex.unlock();
-	log("after iterating through clients");
 }
 
 void Tcp_Server::clientEventsHandler(const Client &client, ClientEvent type, const std::string &msg) {
 	switch(type) {
 		case ClientEvent::INCOMING_MSG:
-			std::cout << "New message from the " << client.getName() << ": " << msg << std::endl;
+			log("New message from the ", client.getName(), ": ", msg);
+			this->notifyIncomingMessage(client.getName(), client.getIp(), msg);
 			break;
 		case ClientEvent::DISCONNECTED:
-			std::cout << "Client " << client.getName() << " disconnected" << std::endl;
+			log("Client ", client.getName(), " disconnected");
+			this->notifyClientDisconnection(client.getName(), client.getIp());
 			break;
 		case ClientEvent::CONNECTED:
-			std::cout << "Client " << client.getName() << " connected" << std::endl;
+			log("Client ", client.getName(), " connected");
+			this->notifyClientConnection(client.getName(), client.getIp());
 			break;
 		default:
-			/* throw std::runtime_error("Unknown handler"); */
+			log("Unexpected event was handled");
 			break;
+	}
+}
+
+void Tcp_Server::registerObserver(Server_Observer *observer) {
+	this->_observers.push_back(observer);
+}
+
+void Tcp_Server::notifyClientConnection(const std::string &clientName, const std::string &clientIp) const {
+	for (size_t i = 0; i < this->_observers.size(); ++i) {
+		if (this->_observers[i]->connectionHandler) {
+			this->_observers[i]->connectionHandler(clientName, clientIp);
+		}
+	}
+}
+
+void Tcp_Server::notifyClientDisconnection(const std::string &clientName, const std::string &clientIp) const {
+	for (size_t i = 0; i < this->_observers.size(); ++i) {
+		if (this->_observers[i]->disconnectionHandler) {
+			this->_observers[i]->disconnectionHandler(clientName, clientIp);
+		}
+	}
+}
+
+void Tcp_Server::notifyIncomingMessage(const std::string &clientName, const std::string &clientIp, const std::string &msg) const {
+	for (size_t i = 0; i < this->_observers.size(); ++i) {
+		if (this->_observers[i]->incomingMessageHandler) {
+			this->_observers[i]->incomingMessageHandler(clientName, clientIp, msg);
+		}
 	}
 }
