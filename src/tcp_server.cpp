@@ -15,8 +15,7 @@ Tcp_Server::Tcp_Server() {
 	this->_clients.reserve(5); // Reserve space for 5 clients
 }
 
-void Tcp_Server::start(const std::string &ip, size_t port) {
-
+bool Tcp_Server::start(const std::string &ip, size_t port) {
 	log("Ip: " + ip);
 	log("Port: ", port);
 	try {
@@ -33,7 +32,9 @@ void Tcp_Server::start(const std::string &ip, size_t port) {
 	} catch(const std::runtime_error &ex) {
 		std::cout << "Error code: " << errno << std::endl;
 		perror(ex.what());
+		return false;
 	}
+	return true;
 }
 
 Tcp_Server::~Tcp_Server() {

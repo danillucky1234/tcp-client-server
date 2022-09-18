@@ -20,7 +20,10 @@ int main() {
 
 	Tcp_Client *client = new Tcp_Client();
 	client->registerObserver(observer);
-	client->connectTo("127.0.0.1", 65123);
+	bool isSuccessful = client->connectTo("0.0.0.0", 65123);
+	if (!isSuccessful) {
+		isNeedTerminate = true;
+	}
 
 	while(!isNeedTerminate) {
 		// get input from user

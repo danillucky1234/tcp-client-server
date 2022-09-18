@@ -9,6 +9,11 @@ void onIncomingMessage(const std::string &clientName, const std::string &clientI
 std::string getCurrentTime();
 
 int main() {
+	int choice;
+	std::string msg;
+	bool isNeedTerminate = false;
+	std::vector<std::string> clients_ip;
+
 	Server_Observer *observer = new Server_Observer();
 	observer->connectionHandler = onClientConnected;
 	observer->disconnectionHandler = onClientDisconnected;
@@ -16,13 +21,11 @@ int main() {
 
 	Tcp_Server *server = new Tcp_Server();
 	server->registerObserver(observer);
-	server->start("127.0.0.1", 65123);
+	bool isSuccessful = server->start("0.0.0.0", 65123);
+	if (!isSuccessful) {
+		isNeedTerminate = true;
+	}
 
-	int choice;
-	std::string msg;
-	bool isNeedTerminate = false;
-
-	std::vector<std::string> clients_ip;
 	while(!isNeedTerminate) {
 		// get input from user
 		showMenu();

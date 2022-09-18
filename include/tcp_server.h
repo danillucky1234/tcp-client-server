@@ -19,7 +19,7 @@ public:
 	~Tcp_Server();
 
 	std::vector<std::string> getClientsIp();
-	void start(const std::string &ip, size_t port);
+	bool start(const std::string &ip, size_t port);
 	void sendMessage(const std::string &msg, int client_id = -1) const;
 	void registerObserver(Server_Observer *observer);
 	std::vector<std::pair<std::string, std::string>> readMessages(int client_id = -1) const;

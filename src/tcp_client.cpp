@@ -15,7 +15,7 @@ Tcp_Client::Tcp_Client() {
 	this->_isConnected = false;
 }
 
-void Tcp_Client::connectTo(const std::string &ip, size_t port) {
+bool Tcp_Client::connectTo(const std::string &ip, size_t port) {
 	try {
 		this->createSocket(
 				AF_INET,     // IPv4
@@ -28,7 +28,9 @@ void Tcp_Client::connectTo(const std::string &ip, size_t port) {
 	} catch (const std::runtime_error &ex) {
 		std::cout << "Error code: " << errno << std::endl;
 		perror(ex.what());
+		return false;
 	}
+	return true;
 }
 
 Tcp_Client::~Tcp_Client() {
@@ -103,7 +105,6 @@ void Tcp_Client::receiveTask() {
 			this->notifyIncomingMessage(std::string(buffer));
 		}
 	}
-
 }
 
 void Tcp_Client::registerObserver(Client_Observer *observer) {

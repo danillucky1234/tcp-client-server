@@ -17,7 +17,7 @@ public:
 
 	void sendMessage(const std::string &msg) const;
 	void registerObserver(Client_Observer *observer);
-	void connectTo(const std::string &ip, size_t port);
+	bool connectTo(const std::string &ip, size_t port);
 
 private:
 	void createSocket(int domain, int type, int protocol);
