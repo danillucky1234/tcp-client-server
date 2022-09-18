@@ -1,4 +1,4 @@
-#include "tcp_client.h"
+#include "../include/tcp_client.h"
 
 template<typename... Args>
 void log(Args... args)
@@ -21,6 +21,8 @@ Tcp_Client::Tcp_Client(const std::string &ip, size_t port) {
 				IPPROTO_TCP  // TCP
 				);
 		this->connectSocket(ip, port);
+		std::thread t1([&]{ this->receiveTask(); });
+		t1.detach();
 	} catch (const std::runtime_error &ex) {
 		std::cout << "Error code: " << errno << std::endl;
 		perror(ex.what());
@@ -37,6 +39,7 @@ void Tcp_Client::createSocket(int domain, int type, int protocol) {
 		throw std::runtime_error("Socket creation failed!");
 	}
 	this->_socket_fd.set(sock_fd);
+	// Manipulate on socket - add signal raiser when new client connects to the server
 	log("Socket creation - OK");
 	log("Socket file descriptor:", sock_fd);
 }
@@ -59,6 +62,7 @@ void Tcp_Client::connectSocket(const std::string &ip, size_t port) {
 	if (connect_result == -1) {
 		throw std::runtime_error("Connection to server failed!");
 	}
+	this->_isConnected = true;
 	log("Connection - OK");
 }
 
@@ -81,11 +85,30 @@ void Tcp_Client::sendMessage(const std::string &msg) const {
 	log("Send to the server: ", msg);
 }
 
-void Tcp_Client::readMessage(char *buffer) const {
-	log("Before reading the message");
-	int read_result = read(this->_socket_fd.get(), buffer, 1024);
-	if (read_result == -1) {
-		throw std::runtime_error("Reading from socket error");
+/* void Tcp_Client::readMessage(char *buffer) const { */
+/* 	log("Before reading the message"); */
+/* 	int read_result = read(this->_socket_fd.get(), buffer, 1024); */
+/* 	if (read_result == -1) { */
+/* 		throw std::runtime_error("Reading from socket error"); */
+/* 	} */
+/* 	log("Read from server: ", buffer); */
+/* } */
+
+void Tcp_Client::receiveTask() {
+	char buffer[1024] = { 0 };
+	while(this->_isConnected) {
+		int read_result = read(this->_socket_fd.get(), buffer, 1024);
+		if (read_result == -1) { // reading error
+			throw std::runtime_error("Reading from socket error");
+		} else if (read_result == 0) { // server disconnected
+			std::string disconnectionMsg = "Server closed connection";
+			this->_isConnected = false;
+			std::cout << disconnectionMsg << std::endl;
+			/* this->closeSocket(); */
+		} else {
+			/* this->_eventHandlerCallback(*this, ClientEvent::INCOMING_MSG, std::string(buffer)); */
+			std::cout << "New message from the server: " << buffer << std::endl;
+		}
 	}
-	log("Read from server: ", *buffer);
+
 }

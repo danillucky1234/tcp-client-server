@@ -1,4 +1,4 @@
-#include "tcp_server.h"
+#include "../include/tcp_server.h"
 
 template<typename... Args>
 void log(Args... args)
@@ -12,7 +12,8 @@ void log(Args... args)
 }
 
 Tcp_Server::Tcp_Server(const std::string &ip, size_t port) {
-	this->_is_running = false;
+	this->_clients.reserve(5); // Reserve space for 5 clients
+
 	log("Ip: " + ip);
 	log("Port: ", port);
 	try {
@@ -23,7 +24,9 @@ Tcp_Server::Tcp_Server(const std::string &ip, size_t port) {
 				);
 		this->bindSocket(ip, port);
 		this->listenSocket();
-		/* this->acceptClient(); */
+
+		std::thread t1([&]{ this->acceptClient();});
+		t1.detach();
 	} catch(const std::runtime_error &ex) {
 		std::cout << "Error code: " << errno << std::endl;
 		perror(ex.what());
@@ -34,25 +37,56 @@ Tcp_Server::~Tcp_Server() {
 	this->closeSocket();
 }
 
-void Tcp_Server::sendMessage(const std::string &msg) const {
-	int send_result = write(this->_client_fd.get(), msg.c_str(), msg.size());
-	if (send_result == -1) {
-		throw std::runtime_error("Sending the message to client error");
+void Tcp_Server::sendMessage(const std::string &msg, int client_id) const {
+	if (client_id == -1) {
+		// send to all
+		for (size_t i = 0; i < this->_clients.size(); ++i) {
+			this->sendMessage(msg, i);
+		}
+	} else if (client_id >= 0 && (size_t)client_id < this->_clients.size()) {
+		int send_result = write(this->_clients[client_id]->getFd(), msg.c_str(), msg.size());
+		if (send_result == -1) {
+			throw std::runtime_error("Sending the message to client error");
+		}
+		if (send_result > 0) {
+			log("Sending message to the ", client_id, " client - OK");
+		}
+		log("Send to the ", client_id, " client: ", msg);
 	}
-	if (send_result > 0) {
-		log("Sending message to the client - OK");
-	}
-	log("Send to the client: ", msg);
 }
 
-void Tcp_Server::readMessage(char *buffer) const {
-	log("Before reading the message");
-	int read_result = read(this->_client_fd.get(), buffer, 1024);
-	if (read_result == -1) {
-		throw std::runtime_error("Reading from socket error");
-	}
-	log("Read from client: ", *buffer);
-}
+/*
+ * @param buffer:
+ * @param client_id:
+ * @return vector of pairs looks like:
+ * {
+ *     <Client name1> : <Message from Client name1>
+ *     <Client name2> : <Message from Client name2>
+ * }
+ */
+/* std::vector<std::pair<std::string, std::string>> Tcp_Server::readMessages(int client_id) const { */
+/* 	std::vector<std::pair<std::string, std::string>> message_log; */
+/* 	char tmp_buffer[1024] = { 0 }; */
+/* 	if (client_id == -1) { // read message from all clients */
+/* 		for (size_t i = 0; i < this->_clients.size(); ++i) { */
+/* 			log("trying to read", i); */
+/* 			this->readMessage(tmp_buffer, i); */
+/* 			message_log.push_back(std::make_pair(this->_clients[i]->getName(), std::string(tmp_buffer))); */
+/* 		} */
+/* 	} else if (client_id >= 0 && (size_t)client_id < this->_clients.size()) { // read message from specified client */
+/* 		this->readMessage(tmp_buffer, client_id); */
+/* 		message_log.push_back(std::make_pair(this->_clients[client_id]->getName(), std::string(tmp_buffer))); */
+/* 	} */
+/* 	return message_log; */
+/* } */
+
+/* void Tcp_Server::readMessage(char *buffer, int client_id) const { */
+/* 	int read_result = read(this->_clients.at(client_id)->getFd(), buffer, 1024); */
+/* 	if (read_result == -1) { */
+/* 		throw std::runtime_error("Reading from socket error"); */
+/* 	} */
+/* 	log("Read from client: ", buffer); */
+/* } */
 
 void Tcp_Server::createSocket(int domain, int type, int protocol) {
 	int sock_fd = socket(domain, type, protocol);
@@ -101,27 +135,34 @@ void Tcp_Server::listenSocket(int max_queue) {
 	if (listen_result == -1) {
 		throw std::runtime_error("Listening socket error");
 	}
-	this->_is_running = true;
 	log("Listening socket - OK");
 }
 
 void Tcp_Server::acceptClient() {
-	// If no pending connections and the socket is not marked as nonblocking,
-	// accept() blocks the caller until a connection is present
-	struct sockaddr_in client_addr;
-	socklen_t client_addr_size = sizeof(client_addr);
-	int new_socket_fd = accept(this->_socket_fd.get(),
-			                   (struct sockaddr*) &client_addr,
-							   &client_addr_size);
-	if (new_socket_fd == -1) {
-		throw std::runtime_error("Accepting socket error");
-	}
+	while(true) {
+		struct sockaddr_in client_addr;
+		socklen_t client_addr_size = sizeof(client_addr);
+		int new_socket_fd = accept(this->_socket_fd.get(),
+								   (struct sockaddr*) &client_addr,
+								   &client_addr_size);
+		if (new_socket_fd == -1) {
+			throw std::runtime_error("Accepting socket error");
+		}
 
-	_client_fd.set(new_socket_fd);
-	log("Accepting client - OK");
-	log("Client IP: ", inet_ntoa(client_addr.sin_addr));
-	log("Client PORT: ", ntohs(client_addr.sin_port));
-	log("Client file descriptor: ", _client_fd.get());
+		this->_mutex.lock();
+		this->_clients.push_back(std::make_unique<Client>(new_socket_fd, client_addr));
+		this->_clients.back()->setName("Client" + std::to_string(this->_clients.size()));
+		this->_clients.back()->setEventHandler(std::bind(&Tcp_Server::clientEventsHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+		this->_clients.back()->startListen();
+		this->clientEventsHandler(*this->_clients.back(), ClientEvent::CONNECTED, "");
+		this->_mutex.unlock();
+
+		log("Accepting client - OK");
+		log("Client IP: ", inet_ntoa(client_addr.sin_addr));
+		log("Client PORT: ", ntohs(client_addr.sin_port));
+		log("Client file descriptor: ", new_socket_fd);
+		log("Client name: ", this->_clients.back()->getName());
+	}
 }
 
 void Tcp_Server::closeSocket() {
@@ -130,5 +171,51 @@ void Tcp_Server::closeSocket() {
 		throw std::runtime_error("Closing the socket error");
 	}
 	log("Close the socket - OK");
-	this->_is_running = false;
+}
+
+std::vector<std::string> Tcp_Server::getClientsIp() {
+	this->removeDeadClients();
+	if (this->_clients.size() == 0) {
+		return {};
+	}
+	log("this->_clients_fd.size():", this->_clients.size());
+	
+	std::vector<std::string> clients_ip;
+	this->_mutex.lock();
+	for (size_t i = 0; i < this->_clients.size(); ++i) {
+		clients_ip.push_back(this->_clients[i]->getIp());
+		log("clients_ip[",i,"]:", clients_ip[i]);
+	}
+	this->_mutex.unlock();
+	return clients_ip;
+}
+
+void Tcp_Server::removeDeadClients() {
+	log("before iterating through clients");
+	this->_mutex.lock();
+	for (size_t i = 0; i < this->_clients.size(); ++i) {
+		if (!this->_clients[i]->isConnected()) {
+			log("the client", i, " is disconnected");
+			this->_clients.erase(this->_clients.begin() + i);
+		}
+	}
+	this->_mutex.unlock();
+	log("after iterating through clients");
+}
+
+void Tcp_Server::clientEventsHandler(const Client &client, ClientEvent type, const std::string &msg) {
+	switch(type) {
+		case ClientEvent::INCOMING_MSG:
+			std::cout << "New message from the " << client.getName() << ": " << msg << std::endl;
+			break;
+		case ClientEvent::DISCONNECTED:
+			std::cout << "Client " << client.getName() << " disconnected" << std::endl;
+			break;
+		case ClientEvent::CONNECTED:
+			std::cout << "Client " << client.getName() << " connected" << std::endl;
+			break;
+		default:
+			/* throw std::runtime_error("Unknown handler"); */
+			break;
+	}
 }
