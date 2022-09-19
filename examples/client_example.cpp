@@ -35,13 +35,21 @@ int main() {
 				std::cout << "Enter the message to the server:" << std::endl;
 				std::cin.ignore();
 				std::getline(std::cin, msg);
-				client->sendMessage(msg);
+				if (client->sendMessage(msg)) {
+					std::cout << "The message was successfully sent!" << std::endl;
+				} else {
+					std::cout << "The message wasn't sent!" << std::endl;
+				}
 				break;
 			case 2:
 				std::cout << "Enter your new nickname:" << std::endl;
 				std::cin.ignore();
 				std::getline(std::cin, msg);
-				client->changeNickname(msg);
+				if (client->changeNickname(msg)) {
+					std::cout << "The nickname was successfully changed!" << std::endl;
+				} else {
+					std::cout << "The nickname wasn't changed!" << std::endl;
+				}
 				break;
 			case 3: // exit
 				isNeedTerminate = true;

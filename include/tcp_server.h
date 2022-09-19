@@ -20,14 +20,14 @@ public:
 
 	std::vector<std::pair<std::string,std::string>> getClientsInfo();
 	bool start(const std::string &ip, size_t port);
-	void sendMessage(const std::string &msg, int client_id = -1) const;
+	bool sendMessage(const std::string &msg, int client_id = -1) const;
 	void registerObserver(Server_Observer *observer);
 
 private:
 	void createSocket(int domain, int type, int protocol);
 	void bindSocket(const std::string &ip, size_t port);
 	void listenSocket(int max_queue = 5);
-	void writeMessage(const std::string &msg, int client_id = -1) const;
+	bool writeMessage(const std::string &msg, int client_id = -1) const;
 	void removeDeadClients();
 	void acceptClient();
 	void closeSocket();

@@ -43,28 +43,36 @@ Tcp_Server::~Tcp_Server() {
 	this->closeSocket();
 }
 
-void Tcp_Server::writeMessage(const std::string &msg, int client_id) const {
+bool Tcp_Server::writeMessage(const std::string &msg, int client_id) const {
 	if (client_id == -1) {
 		// send to all
+		bool isSentToAll = (this->_clients.size() != 0);
 		for (size_t i = 0; i < this->_clients.size(); ++i) {
-			this->writeMessage(msg, i);
+			if(!this->writeMessage(msg, i)) {
+				log("Message was not sent to the ", this->_clients[i]->getName());
+				isSentToAll = false;
+			}
 		}
+		return isSentToAll;
 	} else if (client_id >= 0 && (size_t)client_id < this->_clients.size()) {
 		int send_result = write(this->_clients[client_id]->getFd(), msg.c_str(), msg.size());
 		if (send_result == -1) {
 			throw std::runtime_error("Sending the message to client error");
+			return false;
 		}
 		if (send_result > 0) {
+			log("Send to the ", client_id, " client: ", msg);
 			log("Sending message to the ", client_id, " client - OK");
+			return true;
 		}
-		log("Send to the ", client_id, " client: ", msg);
 	}
+	return false;
 }
 
-void Tcp_Server::sendMessage(const std::string &msg, int client_id) const {
+bool Tcp_Server::sendMessage(const std::string &msg, int client_id) const {
 	std::stringstream ss;
 	ss << msg.size() << REQUEST_SEPARATOR << msg;
-	this->writeMessage(ss.str(), client_id);
+	return this->writeMessage(ss.str(), client_id);
 }
 
 void Tcp_Server::createSocket(int domain, int type, int protocol) {

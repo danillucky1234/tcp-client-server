@@ -77,16 +77,18 @@ void Tcp_Client::closeSocket() {
 	log("Close the socket - OK");
 }
 
-void Tcp_Client::writeMessage(const std::string &msg) const {
+bool Tcp_Client::writeMessage(const std::string &msg) const {
 	int send_result = write(this->_socket_fd.get(), msg.c_str(), msg.size());
 	if (send_result == -1) {
 		throw std::runtime_error("Sending the message to server error");
+		return false;
 	}
-
 	if (send_result > 0) {
 		log("Sending message to the server - OK");
+		log("Send to the server: ", msg);
+		return true;
 	}
-	log("Send to the server: ", msg);
+	return false;
 }
 
 void Tcp_Client::receiveTask() {
@@ -125,6 +127,7 @@ void Tcp_Client::receiveTask() {
 
 			// we can be here only if we read from socket the first time
 			msg_size = std::atoi(std::strtok(buffer, REQUEST_SEPARATOR));
+			if (msg_size == 0) { continue; }
 			messageFromTheServer = std::strtok(nullptr, "\n");
 
 			if (bytesRead < msg_size) {
@@ -168,14 +171,14 @@ void Tcp_Client::notifyIncomingMessage(const std::string &msg) const {
 	}
 }
 
-void Tcp_Client::changeNickname(const std::string &msg) const {
+bool Tcp_Client::changeNickname(const std::string &msg) const {
 	std::stringstream ss;
 	ss << server_commands::NICK_CHANGE << REQUEST_SEPARATOR << msg.size() << REQUEST_SEPARATOR << msg;
-	this->writeMessage(ss.str());
+	return this->writeMessage(ss.str());
 }
 
-void Tcp_Client::sendMessage(const std::string &msg) const {
+bool Tcp_Client::sendMessage(const std::string &msg) const {
 	std::stringstream ss;
 	ss << server_commands::SEND_MESSAGE << REQUEST_SEPARATOR << msg.size() << REQUEST_SEPARATOR << msg;
-	this->writeMessage(ss.str());
+	return this->writeMessage(ss.str());
 }

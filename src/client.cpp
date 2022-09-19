@@ -85,6 +85,7 @@ void Client::receiveTask() {
 			// we can be here only if we read from socket the first time
 			std::strcpy(command_prefix, std::strtok(buffer, REQUEST_SEPARATOR));
 			msg_size = std::atoi(std::strtok(nullptr, REQUEST_SEPARATOR));
+			if (msg_size == 0) { continue; }
 			messageFromTheClient = std::strtok(nullptr, "\n"); // remember the first cutted message from the socket
 
 			if (bytesRead < msg_size) {

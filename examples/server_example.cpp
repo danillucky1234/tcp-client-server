@@ -48,7 +48,11 @@ int main() {
 				std::cout << "Enter the message to the all clients:" << std::endl;
 				std::cin.ignore();
 				std::getline(std::cin, msg);
-				server->sendMessage(msg);
+				if(server->sendMessage(msg)) {
+					std::cout << "The message was successfully sent!" << std::endl;
+				} else {
+					std::cout << "The message wasn't sent!" << std::endl;
+				}
 				break;
 			case 3: // exit
 				isNeedTerminate = true;
