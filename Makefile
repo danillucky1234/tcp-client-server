@@ -2,7 +2,7 @@ TARGET_SERVER := server
 TARGET_CLIENT := client
 
 CXX       := g++
-CXXFLAGS  := -Wall -Werror
+CXXFLAGS  := -Wall -Werror -std=c++14
 PREF_OBJS := ./obj/
 PREF_SRCS := ./src/
 # MACROS    := -D DEBUG

@@ -5,6 +5,12 @@
 #include "client.h"
 #include "server_observer.h"
 
+struct client_info {
+public:
+	std::string name;
+	std::string ip;
+};
+
 class Tcp_Server {
 private:
 	FileDescriptor _socket_fd;
@@ -18,7 +24,7 @@ public:
 	Tcp_Server();
 	~Tcp_Server();
 
-	std::vector<std::pair<std::string,std::string>> getClientsInfo();
+	std::vector<client_info*> getClientsInfo();
 	bool start(const std::string &ip, size_t port);
 	bool sendMessage(const std::string &msg, int client_id = -1) const;
 	void registerObserver(Server_Observer *observer);

@@ -107,7 +107,6 @@ void Tcp_Server::bindSocket(const std::string &ip, size_t port) {
 	if (ip_convertation_result == 0) {
 		throw std::runtime_error("Convertation ip to network byte order failed!");
 	}
-	log("NBO Port:", addr.sin_port);
 
 	int bindResult = bind(this->_socket_fd.get(), (struct sockaddr*) &addr, sizeof(addr));
 	if (bindResult == -1) {
@@ -157,16 +156,16 @@ void Tcp_Server::closeSocket() {
 	log("Close the socket - OK");
 }
 
-std::vector<std::pair<std::string,std::string>> Tcp_Server::getClientsInfo() {
+std::vector<client_info*> Tcp_Server::getClientsInfo() {
 	if (this->_clients.size() == 0) { return {}; }
 	log("Clients:", this->_clients.size());
-	
-	std::vector<std::pair<std::string,std::string>> clients_info;
+
+	std::vector<client_info*> clients_info;
 	for (size_t i = 0; i < this->_clients.size(); ++i) {
-		clients_info.push_back(std::make_pair(
-							this->_clients[i]->getName(),
-							this->_clients[i]->getIp()
-							));
+		clients_info.push_back(new client_info {
+							this->_clients[i]->getName(), // name
+							this->_clients[i]->getIp()    // ip
+							});
 	}
 	return clients_info;
 }

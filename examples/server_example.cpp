@@ -13,7 +13,7 @@ int main() {
 	int choice;
 	std::string msg;
 	bool isNeedTerminate = false;
-	std::vector<std::pair<std::string,std::string>> clients_info;
+	std::vector<client_info*> clients_info;
 
 	Server_Observer *observer = new Server_Observer();
 	observer->connectionHandler = onClientConnected;
@@ -40,7 +40,7 @@ int main() {
 					std::cout << "No connected clients" << std::endl;
 				} else {
 					for (size_t i = 0; i < clients_info.size(); ++i) {
-						std::cout << clients_info[i].first << ": " << clients_info[i].second << std::endl;
+						std::cout << clients_info[i]->name << ": " << clients_info[i]->ip << std::endl;
 					}
 				}
 				break;
