@@ -28,7 +28,9 @@ bool Tcp_Server::start(const std::string &ip, size_t port) {
 		this->listenSocket();
 
 		std::thread t1([&]{ this->acceptClient();});
+		std::thread t2([&]{ this->removeDeadClients();});
 		t1.detach();
+		t2.detach();
 	} catch(const std::runtime_error &ex) {
 		std::cout << "Error code: " << errno << std::endl;
 		perror(ex.what());
@@ -41,11 +43,11 @@ Tcp_Server::~Tcp_Server() {
 	this->closeSocket();
 }
 
-void Tcp_Server::sendMessage(const std::string &msg, int client_id) const {
+void Tcp_Server::writeMessage(const std::string &msg, int client_id) const {
 	if (client_id == -1) {
 		// send to all
 		for (size_t i = 0; i < this->_clients.size(); ++i) {
-			this->sendMessage(msg, i);
+			this->writeMessage(msg, i);
 		}
 	} else if (client_id >= 0 && (size_t)client_id < this->_clients.size()) {
 		int send_result = write(this->_clients[client_id]->getFd(), msg.c_str(), msg.size());
@@ -57,6 +59,12 @@ void Tcp_Server::sendMessage(const std::string &msg, int client_id) const {
 		}
 		log("Send to the ", client_id, " client: ", msg);
 	}
+}
+
+void Tcp_Server::sendMessage(const std::string &msg, int client_id) const {
+	std::stringstream ss;
+	ss << msg.size() << REQUEST_SEPARATOR << msg;
+	this->writeMessage(ss.str(), client_id);
 }
 
 void Tcp_Server::createSocket(int domain, int type, int protocol) {
@@ -75,8 +83,8 @@ void Tcp_Server::bindSocket(const std::string &ip, size_t port) {
 	// Set options for socket
 	int optional_value = 1;
 	if (setsockopt(this->_socket_fd.get(), // Socket fd
-				   SOL_SOCKET /*maybe use IPPROTO_TCP*/, // Manipulate at the sockets API level
-                   SO_REUSEADDR | SO_REUSEPORT, // 
+				   SOL_SOCKET, // Manipulate at the sockets API level
+                   SO_REUSEADDR | SO_REUSEPORT, // If connection is TIME_WAIT - reuse that socket
 				   &optional_value,
                    sizeof(optional_value))
 			== -1) {
@@ -92,7 +100,6 @@ void Tcp_Server::bindSocket(const std::string &ip, size_t port) {
 		throw std::runtime_error("Convertation ip to network byte order failed!");
 	}
 	log("NBO Port:", addr.sin_port);
-
 
 	int bindResult = bind(this->_socket_fd.get(), (struct sockaddr*) &addr, sizeof(addr));
 	if (bindResult == -1) {
@@ -120,13 +127,12 @@ void Tcp_Server::acceptClient() {
 			throw std::runtime_error("Accepting socket error");
 		}
 
-		this->_mutex.lock();
+		this->_clients_mutex.lock();
 		this->_clients.push_back(std::make_unique<Client>(new_socket_fd, client_addr));
-		this->_clients.back()->setName("Client" + std::to_string(this->_clients.size()));
 		this->_clients.back()->setEventHandler(std::bind(&Tcp_Server::clientEventsHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 		this->_clients.back()->startListen();
 		this->clientEventsHandler(*this->_clients.back(), ClientEvent::CONNECTED, "");
-		this->_mutex.unlock();
+		this->_clients_mutex.unlock();
 
 		log("Accepting client - OK");
 		log("Client IP: ", inet_ntoa(client_addr.sin_addr));
@@ -137,39 +143,38 @@ void Tcp_Server::acceptClient() {
 }
 
 void Tcp_Server::closeSocket() {
-	// close the socket
 	if(close(this->_socket_fd.get()) == -1) {
 		throw std::runtime_error("Closing the socket error");
 	}
 	log("Close the socket - OK");
 }
 
-std::vector<std::string> Tcp_Server::getClientsIp() {
-	this->removeDeadClients();
-	if (this->_clients.size() == 0) {
-		return {};
-	}
+std::vector<std::pair<std::string,std::string>> Tcp_Server::getClientsInfo() {
+	if (this->_clients.size() == 0) { return {}; }
 	log("Clients:", this->_clients.size());
 	
-	std::vector<std::string> clients_ip;
-	this->_mutex.lock();
+	std::vector<std::pair<std::string,std::string>> clients_info;
 	for (size_t i = 0; i < this->_clients.size(); ++i) {
-		clients_ip.push_back(this->_clients[i]->getIp());
-		log("clients_ip[",i,"]:", clients_ip[i]);
+		clients_info.push_back(std::make_pair(
+							this->_clients[i]->getName(),
+							this->_clients[i]->getIp()
+							));
 	}
-	this->_mutex.unlock();
-	return clients_ip;
+	return clients_info;
 }
 
 void Tcp_Server::removeDeadClients() {
-	this->_mutex.lock();
-	for (size_t i = 0; i < this->_clients.size(); ++i) {
-		if (!this->_clients[i]->isConnected()) {
-			log("the client", i, " is disconnected");
-			this->_clients.erase(this->_clients.begin() + i);
+	while(true) {
+		for (size_t i = 0; i < this->_clients.size(); ++i) {
+			if (!this->_clients[i]->isConnected()) {
+				log("the client", i, " is disconnected");
+				this->_clients_mutex.lock();
+				this->_clients.erase(this->_clients.begin() + i);
+				this->_clients_mutex.unlock();
+			}
 		}
+		usleep(5000);
 	}
-	this->_mutex.unlock();
 }
 
 void Tcp_Server::clientEventsHandler(const Client &client, ClientEvent type, const std::string &msg) {
@@ -185,6 +190,10 @@ void Tcp_Server::clientEventsHandler(const Client &client, ClientEvent type, con
 		case ClientEvent::CONNECTED:
 			log("Client ", client.getName(), " connected");
 			this->notifyClientConnection(client.getName(), client.getIp());
+			break;
+		case ClientEvent::NICK_CHANGED:
+			log("Client ", msg, " changed nickname to ", client.getName());
+			this->notifyClientNickChanging(msg, client.getName(), client.getIp());
 			break;
 		default:
 			log("Unexpected event was handled");
@@ -216,6 +225,14 @@ void Tcp_Server::notifyIncomingMessage(const std::string &clientName, const std:
 	for (size_t i = 0; i < this->_observers.size(); ++i) {
 		if (this->_observers[i]->incomingMessageHandler) {
 			this->_observers[i]->incomingMessageHandler(clientName, clientIp, msg);
+		}
+	}
+}
+
+void Tcp_Server::notifyClientNickChanging(const std::string &oldName, const std::string &newName, const std::string &clientIp) const {
+	for (size_t i = 0; i < this->_observers.size(); ++i) {
+		if (this->_observers[i]->nickChangingHandler) {
+			this->_observers[i]->nickChangingHandler(oldName, newName, clientIp);
 		}
 	}
 }

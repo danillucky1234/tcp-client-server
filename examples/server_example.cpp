@@ -6,18 +6,20 @@ void onClientConnected(const std::string &clientName, const std::string &clientI
 void onClientDisconnected(const std::string &clientName, const std::string &clientIp);
 void onIncomingMessage(const std::string &clientName, const std::string &clientIp,
 					   const std::string &msg);
+void onClientNameChanged(const std::string &oldName, const std::string &newName, const std::string &clientIp);
 std::string getCurrentTime();
 
 int main() {
 	int choice;
 	std::string msg;
 	bool isNeedTerminate = false;
-	std::vector<std::string> clients_ip;
+	std::vector<std::pair<std::string,std::string>> clients_info;
 
 	Server_Observer *observer = new Server_Observer();
 	observer->connectionHandler = onClientConnected;
 	observer->disconnectionHandler = onClientDisconnected;
 	observer->incomingMessageHandler = onIncomingMessage;
+	observer->nickChangingHandler = onClientNameChanged;
 
 	Tcp_Server *server = new Tcp_Server();
 	server->registerObserver(observer);
@@ -33,12 +35,12 @@ int main() {
 
 		switch(choice) {
 			case 1: // get user ip
-				clients_ip = server->getClientsIp();
-				if (clients_ip.size() == 0) {
+				clients_info = server->getClientsInfo();
+				if (clients_info.size() == 0) {
 					std::cout << "No connected clients" << std::endl;
 				} else {
-					for (size_t i = 0; i < clients_ip.size(); ++i) {
-						std::cout << "Client " << i << ": " << clients_ip[i] << std::endl;
+					for (size_t i = 0; i < clients_info.size(); ++i) {
+						std::cout << clients_info[i].first << ": " << clients_info[i].second << std::endl;
 					}
 				}
 				break;
@@ -84,11 +86,11 @@ int getUserInput() {
 }
 
 void onClientConnected(const std::string &clientName, const std::string &clientIp) {
-	std::cout << "[" << getCurrentTime() << "] " << "Client " << clientName << " [" << clientIp << "] was connected" << std::endl;
+	std::cout << "[" << getCurrentTime() << "] " << clientName << " [" << clientIp << "] was connected" << std::endl;
 }
 
 void onClientDisconnected(const std::string &clientName, const std::string &clientIp) {
-	std::cout << "[" << getCurrentTime() << "] " << "Client " << clientName << " [" << clientIp << "] was disconnected" << std::endl;
+	std::cout << "[" << getCurrentTime() << "] " << clientName << " [" << clientIp << "] was disconnected" << std::endl;
 }
 
 void onIncomingMessage(const std::string &clientName, const std::string &clientIp,
@@ -103,4 +105,8 @@ std::string getCurrentTime() {
     tstruct = *localtime(&now);
 	std::strftime(buf, sizeof(buf), "%X", &tstruct);
     return buf;
+}
+
+void onClientNameChanged(const std::string &oldName, const std::string &newName, const std::string &clientIp) {
+	std::cout << oldName << " changed his nickname to " << newName << std::endl;
 }

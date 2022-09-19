@@ -43,7 +43,6 @@ void Tcp_Client::createSocket(int domain, int type, int protocol) {
 		throw std::runtime_error("Socket creation failed!");
 	}
 	this->_socket_fd.set(sock_fd);
-	// Manipulate on socket - add signal raiser when new client connects to the server
 	log("Socket creation - OK");
 	log("Socket file descriptor:", sock_fd);
 }
@@ -78,7 +77,7 @@ void Tcp_Client::closeSocket() {
 	log("Close the socket - OK");
 }
 
-void Tcp_Client::sendMessage(const std::string &msg) const {
+void Tcp_Client::writeMessage(const std::string &msg) const {
 	int send_result = write(this->_socket_fd.get(), msg.c_str(), msg.size());
 	if (send_result == -1) {
 		throw std::runtime_error("Sending the message to server error");
@@ -91,18 +90,52 @@ void Tcp_Client::sendMessage(const std::string &msg) const {
 }
 
 void Tcp_Client::receiveTask() {
-	char buffer[1024] = { 0 };
+	char buffer[MAX_PACKET_SIZE] = { 0 };
+	int msg_size;
+	std::string messageFromTheServer = "";
+	int readMessageSize = 0;
+	bool isReadAgain = false;
+
 	while(this->_isConnected) {
-		int read_result = read(this->_socket_fd.get(), buffer, 1024);
-		if (read_result == -1) { // reading error
+		int bytesRead = read(this->_socket_fd.get(), buffer, MAX_PACKET_SIZE);
+		if (bytesRead == -1) { // reading error
 			throw std::runtime_error("Reading from socket error");
-		} else if (read_result == 0) { // server disconnected
+		} else if (bytesRead == 0) { // server disconnected
 			log("Server closed connection");
 			this->_isConnected = false;
 			this->notifyServerDisconnection();
 		} else {
 			log("New message from the server: ", buffer);
-			this->notifyIncomingMessage(std::string(buffer));
+			if (isReadAgain) {
+				// at this moment bytesRead is equal to message size
+				if (readMessageSize + bytesRead < msg_size) {
+					messageFromTheServer += buffer;
+					readMessageSize += messageFromTheServer.size(); // remember the first cutted message size
+					std::memset(buffer, 0, sizeof(buffer)); // zero buffer
+					continue;
+				}
+				messageFromTheServer += buffer;
+				// at this moment the message is fully written to the variable messageFromTheServer
+				isReadAgain = false;
+				readMessageSize = 0;
+				this->notifyIncomingMessage(messageFromTheServer);
+				std::memset(buffer, 0, sizeof(buffer)); // zero buffer
+				continue;
+			}
+
+			// we can be here only if we read from socket the first time
+			msg_size = std::atoi(std::strtok(buffer, REQUEST_SEPARATOR));
+			messageFromTheServer = std::strtok(nullptr, "\n");
+
+			if (bytesRead < msg_size) {
+				isReadAgain = true;
+				readMessageSize = messageFromTheServer.size(); // remember the first cutted message size
+				std::memset(buffer, 0, sizeof(buffer)); // zero buffer
+				continue; // read from the socket again
+			}
+
+			this->notifyIncomingMessage(messageFromTheServer);
+			std::memset(buffer, 0, sizeof(buffer));
 		}
 	}
 }
@@ -133,4 +166,16 @@ void Tcp_Client::notifyIncomingMessage(const std::string &msg) const {
 			this->_observers[i]->incomingMessageHandler(msg);
 		}
 	}
+}
+
+void Tcp_Client::changeNickname(const std::string &msg) const {
+	std::stringstream ss;
+	ss << server_commands::NICK_CHANGE << REQUEST_SEPARATOR << msg.size() << REQUEST_SEPARATOR << msg;
+	this->writeMessage(ss.str());
+}
+
+void Tcp_Client::sendMessage(const std::string &msg) const {
+	std::stringstream ss;
+	ss << server_commands::SEND_MESSAGE << REQUEST_SEPARATOR << msg.size() << REQUEST_SEPARATOR << msg;
+	this->writeMessage(ss.str());
 }

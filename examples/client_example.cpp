@@ -37,7 +37,13 @@ int main() {
 				std::getline(std::cin, msg);
 				client->sendMessage(msg);
 				break;
-			case 2: // exit
+			case 2:
+				std::cout << "Enter your new nickname:" << std::endl;
+				std::cin.ignore();
+				std::getline(std::cin, msg);
+				client->changeNickname(msg);
+				break;
+			case 3: // exit
 				isNeedTerminate = true;
 				break;
 			default:
@@ -55,12 +61,13 @@ int main() {
 void showMenu() {
 	std::cout << "Pick one of the following items:" << std::endl
 			  << "  1. Send message to the server" << std::endl
-			  << "  2. Exit" << std::endl;
+			  << "  2. Change nickname" << std::endl
+			  << "  3. Exit" << std::endl;
 }
 
 int getUserInput() {
 	int minBound = 1;
-	int maxBound = 2;
+	int maxBound = 3;
 	int choice;
 	while(true) {
 		std::cin >> choice;
