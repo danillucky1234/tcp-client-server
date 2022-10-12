@@ -13,4 +13,5 @@ default it'll listen 65123 port), and to simulate the work of the client you
 need to execute `./client` in a new terminal.  
 
 ##### Example  
-<img src="https://i.imgur.com/oyfGFjP.png" />
+<a href="https://youtu.be/cg1oscElMgc" target="_blank"><img src="https://i.imgur.com/oyfGFjP.png"
+alt="TCP console client-server application overview" width="1080" height="480" /></a>
